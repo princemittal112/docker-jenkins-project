@@ -55,10 +55,65 @@ COPY --from=builder /app/target/*.jar app.jar
 EXPOSE 8081
 ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
-
 ---
 
 ## ✅ Jenkinsfile (CI/CD Pipeline)
+
+```groovy
+pipeline {
+    agent any
+
+    environment {
+        EC2_USER   = "ec2-user"
+        EC2_HOST   = "ec2-54-91-8-37.compute-1.amazonaws.com"
+        PEM_FILE   = "/Users/princemittal/Downloads/princemittal2.pem"
+        REPO_URL   = "https://github.com/princemittal112/spring-petclinic.git"
+        APP_DIR    = "/home/ec2-user/app"
+        IMAGE_NAME = "spring-petclinic"
+        PORT       = "8081"
+    }
+
+    stages {
+        stage('Deploy to EC2') {
+            steps {
+                script {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no -i ${PEM_FILE} ${EC2_USER}@${EC2_HOST} '
+                        sudo yum install -y git docker || true
+                        sudo systemctl start docker
+                        sudo systemctl enable docker
+
+                        # Pull latest code
+                        if [ ! -d "${APP_DIR}" ]; then
+                            git clone "${REPO_URL}" "${APP_DIR}"
+                        else
+                            cd "${APP_DIR}" && git pull
+                        fi
+
+                        cd "${APP_DIR}"
+
+                        docker rm -f "${IMAGE_NAME}" || true
+                        docker system prune -af || true
+
+                        # Build correct Java image
+                        docker build --no-cache -t "${IMAGE_NAME}" .
+
+                        # Run container (Java app)
+                        docker run -d --name "${IMAGE_NAME}" -p ${PORT}:8081 "${IMAGE_NAME}"
+                    '
+                    """
+                }
+            }
+        }
+    }
+}
+
+
+```
+
+---
+
+## ✅ Jenkinsfile for both websites if agent node present
 
 ```groovy
 pipeline {
